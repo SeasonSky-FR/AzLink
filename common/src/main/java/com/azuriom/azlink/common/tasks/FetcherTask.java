@@ -101,12 +101,17 @@ public class FetcherTask implements Runnable {
             }
 
             for (String command : entry.getValue()) {
-                command = command.replace("{player}", playerName)
-                        .replace("{uuid}", player != null ? player.getUuid().toString() : "?");
+                if (this.plugin.getConfig().isWhitelisted(command)) {
+                    command = command.replace("{player}", playerName)
+                            .replace("{uuid}", player != null ? player.getUuid().toString() : "?");
 
-                this.plugin.getLogger().info("Dispatching command for player " + playerName + ": " + command);
+                    this.plugin.getLogger().info("Dispatching command for player " + playerName + ": " + command);
 
-                this.plugin.getPlatform().dispatchConsoleCommand(command);
+                    this.plugin.getPlatform().dispatchConsoleCommand(command);
+                }
+                else {
+                    this.plugin.getLogger().info("Error when dispatching command for player " + playerName + ": " + command + " the command is not whitelisted.");
+                }
             }
         }
     }

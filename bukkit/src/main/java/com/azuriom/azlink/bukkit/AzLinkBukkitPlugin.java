@@ -156,6 +156,7 @@ public final class AzLinkBukkitPlugin extends JavaPlugin implements AzLinkPlatfo
 
     @Override
     public void dispatchConsoleCommand(String command) {
+
         getServer().dispatchCommand(getServer().getConsoleSender(), command);
     }
 
