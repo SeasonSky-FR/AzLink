@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        java-version: [8, 11, 17]
+        java-version: [17] # we only support Java 17 on this fork
 
     steps:
       - name: Checkout repository
