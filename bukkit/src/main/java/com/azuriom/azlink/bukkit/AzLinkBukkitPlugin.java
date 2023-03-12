@@ -17,6 +17,7 @@ import com.azuriom.azlink.common.platform.PlatformType;
 import com.azuriom.azlink.common.scheduler.JavaSchedulerAdapter;
 import com.azuriom.azlink.common.scheduler.SchedulerAdapter;
 import com.azuriom.azlink.common.tasks.TpsTask;
+import net.william278.husksync.api.HuskSyncAPI;
 import org.bukkit.entity.Player;
 import org.bukkit.metadata.MetadataValue;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -35,6 +36,7 @@ public final class AzLinkBukkitPlugin extends JavaPlugin implements AzLinkPlatfo
 
     private AzLinkPlugin plugin;
     private LoggerAdapter logger;
+    private boolean huskSyncEnabled;
 
     @Override
     public void onLoad() {
@@ -66,6 +68,7 @@ public final class AzLinkBukkitPlugin extends JavaPlugin implements AzLinkPlatfo
         };
         this.plugin.init();
 
+        //noinspection DataFlowIssue
         getCommand("azlink").setExecutor(new BukkitCommandExecutor(this.plugin));
 
         getServer().getScheduler().runTaskTimer(this, this.tpsTask, 0, 1);
@@ -80,6 +83,7 @@ public final class AzLinkBukkitPlugin extends JavaPlugin implements AzLinkPlatfo
         if (getServer().getPluginManager().getPlugin("PlaceholderAPI") != null) {
             MoneyPlaceholderExpansion.enable(this);
         }
+        huskSyncEnabled = getServer().getPluginManager().getPlugin("HuskSync") != null;
     }
 
     @Override
@@ -143,6 +147,7 @@ public final class AzLinkBukkitPlugin extends JavaPlugin implements AzLinkPlatfo
             return getServer().getOnlinePlayers()
                     .stream()
                     .filter(this::isPlayerVisible)
+                    .filter(this::isPlayerLoaded)
                     .map(BukkitCommandSender::new);
         }
 
@@ -167,5 +172,10 @@ public final class AzLinkBukkitPlugin extends JavaPlugin implements AzLinkPlatfo
             }
         }
         return true;
+    }
+
+    private boolean isPlayerLoaded(Player player) {
+        if(!huskSyncEnabled) return true;
+        return !HuskSyncAPI.getInstance().getUser(player).isLocked();
     }
 }
