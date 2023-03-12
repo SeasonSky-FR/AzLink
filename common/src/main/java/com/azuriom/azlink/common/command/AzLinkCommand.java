@@ -1,16 +1,20 @@
 package com.azuriom.azlink.common.command;
 
 import com.azuriom.azlink.common.AzLinkPlugin;
+import com.azuriom.azlink.common.data.UserInfo;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 public class AzLinkCommand {
 
-    private static final List<String> COMPLETIONS = Arrays.asList("status", "setup", "fetch", "port");
+    private static final List<String> COMPLETIONS = Arrays.asList("status", "setup", "fetch", "money", "port");
+    private static final List<String> MONEY_ACTIONS = Arrays.asList("add", "remove", "set");
 
     private final AzLinkPlugin plugin;
 
@@ -42,13 +46,27 @@ public class AzLinkCommand {
         }
 
         if (args[0].equalsIgnoreCase("status")) {
-            plugin.getScheduler().executeAsync(() -> showStatus(sender));
+            showStatus(sender);
+            return;
+        }
+
+        if (args[0].equalsIgnoreCase("money")) {
+            try {
+                editMoney(sender, args);
+            } catch (NumberFormatException e) {
+                sender.sendMessage("&c'" + args[3] + "' is not a valid number !");
+            }
             return;
         }
 
         if (args[0].equalsIgnoreCase("fetch")) {
-            this.plugin.fetchNow();
-            sender.sendMessage("&6Data has been fetched successfully.");
+            this.plugin.fetch()
+                    .thenRun(() -> sender.sendMessage("&6Data has been fetched successfully."))
+                    .exceptionally(ex -> {
+                        sender.sendMessage("&cUnable to fetch data: " + ex.getMessage());
+
+                        return null;
+                    });
             return;
         }
 
@@ -79,7 +97,8 @@ public class AzLinkCommand {
 
                 sender.sendMessage("&aHTTP server started on port " + port);
             } catch (Exception e) {
-                sender.sendMessage("&cAn error occurred while starting the HTTP server: " + e.getMessage() + " - " + e.getClass().getName());
+                String info = e.getMessage() + " - " + e.getClass().getName();
+                sender.sendMessage("&cAn error occurred while starting the HTTP server: " + info);
                 this.plugin.getLogger().error("Error while starting the HTTP server", e);
                 return;
             }
@@ -103,7 +122,52 @@ public class AzLinkCommand {
                     .collect(Collectors.toList());
         }
 
+        if (args.length == 2 && args[0].equalsIgnoreCase("money")) {
+            return MONEY_ACTIONS.stream()
+                    .filter(s -> startsWithIgnoreCase(s, args[1]))
+                    .collect(Collectors.toList());
+        }
+
+        if (args.length == 3 && args[0].equalsIgnoreCase("money")) {
+            return this.plugin.getPlatform().getOnlinePlayers()
+                    .map(CommandSender::getName)
+                    .filter(name -> startsWithIgnoreCase(name, args[2]))
+                    .collect(Collectors.toList());
+        }
+
         return Collections.emptyList();
+    }
+
+    public void editMoney(CommandSender sender, String[] args) throws NumberFormatException {
+        if (args.length < 4 || !MONEY_ACTIONS.contains(args[1].toLowerCase())) {
+            sender.sendMessage("&cUsage: /azlink money <add|remove|set> <player> <amount>");
+            return;
+        }
+
+        String action = args[1].toLowerCase();
+        double amount = Double.parseDouble(args[3]);
+        Optional<UserInfo> user = this.plugin.getUserManager().getUserByName(args[2]);
+
+        if (amount <= 0) {
+            sender.sendMessage("&cThe amount must be positive.");
+            return;
+        }
+
+        if (!user.isPresent()) {
+            sender.sendMessage("&cUnable to find player '" + args[2] + "', please try again in few seconds or use '/azlink fetch'.");
+            return;
+        }
+
+        this.plugin.getUserManager().editMoney(user.get(), action, amount)
+                .thenAccept(u -> {
+                    sender.sendMessage("&aMoney has been edited successfully.");
+                    sender.sendMessage("&aNew balance: " + u.getMoney());
+                })
+                .exceptionally(ex -> {
+                    sender.sendMessage("&cUnable to edit money: " + ex.getMessage());
+
+                    return null;
+                });
     }
 
     public String getUsage() {
@@ -123,43 +187,38 @@ public class AzLinkCommand {
             url = url.substring(0, url.length() - 1);
         }
 
+        if (startsWithIgnoreCase(url, "http:")) {
+            sender.sendMessage("&6You should use https to improve security!");
+        }
+
         this.plugin.getConfig().setSiteKey(key);
         this.plugin.getConfig().setSiteUrl(url);
 
-        if (showStatus(sender)) {
-            if (startsWithIgnoreCase(url, "http://")) {
-                sender.sendMessage("&6You should use https to improve security.");
-            }
-
-            saveConfig(sender);
-
-            this.plugin.restartHttpServer();
-        }
+        showStatus(sender)
+                .thenRun(() -> saveConfig(sender))
+                .thenRun(this.plugin::restartHttpServer);
     }
 
     private void saveConfig(CommandSender sender) {
         try {
             this.plugin.saveConfig();
         } catch (IOException e) {
-            sender.sendMessage("&cAn error occurred while saving config: " + e.getMessage() + " - " + e.getClass().getName());
+            String info = e.getMessage() + " - " + e.getClass().getName();
+            sender.sendMessage("&cAn error occurred while saving config: " + info);
             this.plugin.getLogger().error("Error while saving config", e);
         }
     }
 
-    private boolean showStatus(CommandSender sender) {
-        try {
-            this.plugin.getHttpClient().verifyStatus();
-
-            sender.sendMessage("&aLinked to the website successfully.");
-
-            this.plugin.fetchNow();
-
-            return true;
-        } catch (Exception e) {
-            sender.sendMessage("&cUnable to connect to the website: " + e.getMessage() + " - " + e.getClass().getName());
-
-            return false;
-        }
+    private CompletableFuture<Void> showStatus(CommandSender sender) {
+        return this.plugin.getHttpClient()
+                .verifyStatus()
+                .thenRun(() -> sender.sendMessage("&aLinked to the website successfully."))
+                .thenRun(this.plugin::fetch)
+                .whenComplete((v, ex) -> {
+                    if (ex != null) {
+                        sender.sendMessage("&cUnable to connect to the website: " + ex.getMessage());
+                    }
+                });
     }
 
     private static boolean startsWithIgnoreCase(String string, String prefix) {
