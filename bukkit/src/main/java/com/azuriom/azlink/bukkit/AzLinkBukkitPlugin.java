@@ -175,7 +175,7 @@ public final class AzLinkBukkitPlugin extends JavaPlugin implements AzLinkPlatfo
     }
 
     private boolean isPlayerLoaded(Player player) {
-        if(!huskSyncEnabled) return true;
+        if(!huskSyncEnabled) return true; // If HuskSync is not installed, we assume the player is loaded
         return !HuskSyncAPI.getInstance().getUser(player).isLocked();
     }
 }
