@@ -151,7 +151,8 @@ public final class AzLinkBukkitPlugin extends JavaPlugin implements AzLinkPlatfo
                     .map(BukkitCommandSender::new);
         }
 
-        return getServer().getOnlinePlayers().stream().map(BukkitCommandSender::new);
+        return getServer().getOnlinePlayers().stream()
+                .filter(this::isPlayerLoaded).map(BukkitCommandSender::new);
     }
 
     @Override
